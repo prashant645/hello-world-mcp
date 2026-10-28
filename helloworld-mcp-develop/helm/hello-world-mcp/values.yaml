@@ -1,0 +1,88 @@
+replicaCount: 1
+
+image:
+  repository: gtlc-docker.common.repositories.cloud.sap/hello-world-mcp
+  pullPolicy: IfNotPresent
+  tag: ""  # Overridden by pipeline with CPE version
+
+imagePullSecrets:
+  - name: docker-registry-secret
+
+# ServiceAccount is managed (created) by Helm for the MCP server.
+# No bootstrap pre-creation required.
+serviceAccount:
+  create: true
+  automount: false
+  name: ""  # Defaults to the full release name
+
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+# IAS configuration
+ias:
+  issuerUri: https://a3enmtmdf.accounts400.ondemand.com
+  # Public OIDC client ID used to validate Joule access-token audiences.
+  mcpUiClientId: ""
+  # Name of the pre-created K8s Secret that holds backend M2M credentials:
+  #   IAS_CLIENT_ID       – M2M client ID for calling hello-world-service
+  #   IAS_CLIENT_SECRET   – M2M client secret
+  # Created once via bootstrap (see scripts/bootstrap-ias-secret.sh).
+  credentialsSecretName: hello-world-mcp-ias-credentials
+
+# Base URL of the hello-world-service backend
+backend:
+  baseUrl: ""
+
+livenessProbe:
+  httpGet:
+    path: /actuator/health
+    port: 8080
+  initialDelaySeconds: 30
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /actuator/health
+    port: 8080
+  initialDelaySeconds: 10
+  periodSeconds: 5
+
+# Kyma APIRule – disabled by default, enabled per environment
+apirule:
+  enabled: false
+  gatewayNamespace: kyma-system
+  gateway: kyma-gateway
+  host: hello-world-mcp
+  path: /{**}
+  methods:
+    - GET
+    - POST
+    - OPTIONS
+  noAuth: true
+  # Optional route timeout (seconds) for Kyma APIRule v2.
+  # Without this the Kyma gateway enforces a 180s hard limit on all HTTP
+  # requests, which breaks SSE connections after 3 minutes.
+  # Set to 3600 (1 hour) or 0 (unlimited) in environments that need
+  # long-lived SSE streams.  Omit (leave empty) to use the gateway default.
+  timeout: ""
+  accessStrategies:
+    - handler: allow
+
+# Additional environment variables injected into the container spec.
+# Use in environment-specific overrides (values-dev.yaml, values-qa.yaml, etc.)
+# to enable feature flags or diagnostics without modifying the template.
+# Example:
+#   env:
+#     - name: MCP_AUTH_DIAGNOSTICS_ENABLED
+#       value: "true"
+env: []

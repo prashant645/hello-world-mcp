@@ -1,0 +1,6 @@
+apiVersion: v2
+name: hello-world-mcp
+description: MCP Server wrapping the Hello World Greeting REST API for Joule Desktop
+type: application
+version: 1.0.0
+appVersion: "1.0.0"

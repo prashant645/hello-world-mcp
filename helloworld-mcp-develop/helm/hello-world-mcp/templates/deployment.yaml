@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hello-world-mcp.fullname" . }}
+  labels:
+    {{- include "hello-world-mcp.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "hello-world-mcp.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hello-world-mcp.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "hello-world-mcp.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automount }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            # ── Outgoing auth: IAS client credentials for M2M calls to hello-world-service ──
+            # Sourced from the K8s Secret created by the prepare_secrets_dev workflow job.
+            - name: IAS_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.ias.credentialsSecretName }}
+                  key: IAS_CLIENT_ID
+            - name: IAS_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.ias.credentialsSecretName }}
+                  key: IAS_CLIENT_SECRET
+            # ── Incoming auth: IAS OAuth2 audience validation for Joule Desktop users ──
+            - name: IAS_MCP_UI_CLIENT_ID
+              value: {{ required "ias.mcpUiClientId is required" .Values.ias.mcpUiClientId | quote }}
+            # ── Backend URL ──────────────────────────────────────────────────────────────
+            - name: BACKEND_BASE_URL
+              value: {{ .Values.backend.baseUrl | quote }}
+            - name: MCP_PUBLIC_BASE_URL
+              value: {{ printf "https://%s" .Values.apirule.host | quote }}
+            # ── Additional env vars from values (e.g. feature flags, diagnostics) ──
+            {{- with .Values.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

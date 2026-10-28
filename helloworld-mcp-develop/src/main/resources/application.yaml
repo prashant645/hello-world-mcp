@@ -1,0 +1,76 @@
+spring:
+  application:
+    name: hello-world-mcp-server
+
+  # ── Incoming auth: validate IAS JWTs from Joule Desktop users ──────────────
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: https://a3enmtmdf.accounts400.ondemand.com/oauth2/certs
+          issuer-uri:  https://a3enmtmdf.accounts400.ondemand.com
+
+  # ── Spring AI MCP Server ───────────────────────────────────────────────────
+  ai:
+    mcp:
+      server:
+        name: hello-world-mcp-server
+        version: 1.0.0
+        # Streamable HTTP transport (MCP spec 2025-11-25).
+        # Joule Desktop connector URL: https://<host>/mcp
+        # POST /mcp  – initialize request + tool calls
+        # GET  /mcp  – optional SSE stream for server-to-client notifications
+        # DELETE /mcp – terminate session
+        # Per-request connections replace the persistent SSE channel, eliminating
+        # the intermittent 180s gateway timeout failures seen with SSE transport.
+        protocol: STREAMABLE
+
+# ── Backend app ────────────────────────────────────────────────────────────────
+backend:
+  # Injected via BACKEND_BASE_URL env var by the Helm deployment template.
+  # Falls back to the dev URL for local development.
+  base-url: ${BACKEND_BASE_URL:https://hello-world-service-dev.c-1282d6a.stage.kyma.ondemand.com}
+
+# Externally visible URL advertised to OAuth-aware MCP clients.
+mcp:
+  public-base-url: ${MCP_PUBLIC_BASE_URL:http://localhost:8080}
+  # Temporary federation-debug switch. When enabled, the MCP app logs a curated
+  # summary of incoming Joule JWT claims and IAS-exchanged backend token claims
+  # (never the raw token) to help diagnose missing user_uuid / local-user linking.
+  auth-diagnostics:
+    enabled: ${MCP_AUTH_DIAGNOSTICS_ENABLED:false}
+
+# ── Outgoing auth: IAS client credentials for M2M calls to backend ─────────────
+# IAS_CLIENT_ID and IAS_CLIENT_SECRET are injected from a Kubernetes Secret.
+ias:
+  token-url: https://a3enmtmdf.accounts400.ondemand.com/oauth2/token
+  # M2M credentials used by the MCP server to call the Hello World backend
+  client-id: ${IAS_CLIENT_ID:}
+  client-secret: ${IAS_CLIENT_SECRET:}
+  # Client ID of the IAS OAuth2 app registered for Joule Desktop users
+  # Injected via IAS_MCP_UI_CLIENT_ID env var (see k8s/deployment.yaml)
+  # Leave empty to skip audience validation during local testing
+  mcp-ui-client-id: ${IAS_MCP_UI_CLIENT_ID:}
+
+# ── Actuator ──────────────────────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+server:
+  port: 8080
+  # Note: server.tomcat.connection-timeout is no longer needed with Streamable HTTP.
+  # Streamable HTTP uses independent per-request connections rather than a
+  # persistent SSE channel, so there is no long-lived connection to protect.
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+logging:
+  level:
+    # MCP Java SDK does not handle notifications/cancelled (java-sdk#416).
+    # Joule Desktop sends this on request cancellation → suppress WARN noise.
+    io.modelcontextprotocol.spec.McpServerSession: ERROR

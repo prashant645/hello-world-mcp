@@ -1,0 +1,39 @@
+{{- $apiRuleV2 := .Capabilities.APIVersions.Has "gateway.kyma-project.io/v2/APIRule" -}}
+{{- $apiRuleV1beta1 := .Capabilities.APIVersions.Has "gateway.kyma-project.io/v1beta1/APIRule" -}}
+{{- if and .Values.apirule.enabled (or $apiRuleV2 $apiRuleV1beta1) }}
+apiVersion: {{ if $apiRuleV2 }}gateway.kyma-project.io/v2{{ else }}gateway.kyma-project.io/v1beta1{{ end }}
+kind: APIRule
+metadata:
+  name: {{ include "hello-world-mcp.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "hello-world-mcp.labels" . | nindent 4 }}
+spec:
+{{- if $apiRuleV2 }}
+  gateway: {{ printf "%s/%s" .Values.apirule.gatewayNamespace .Values.apirule.gateway }}
+  hosts:
+    - {{ .Values.apirule.host }}
+{{- else }}
+  gateway: {{ .Values.apirule.gateway }}
+  host: {{ .Values.apirule.host }}
+{{- end }}
+  service:
+    name: {{ include "hello-world-mcp.fullname" . }}
+    port: {{ .Values.service.port }}
+  rules:
+    - path: {{ if $apiRuleV2 }}{{ .Values.apirule.path }}{{ else }}{{ default "/.*" .Values.apirule.v1beta1Path }}{{ end }}
+      methods:
+        {{- toYaml .Values.apirule.methods | nindent 8 }}
+{{- if $apiRuleV2 }}
+      noAuth: {{ .Values.apirule.noAuth }}
+      {{- if .Values.apirule.timeout }}
+      # Override the Kyma gateway route timeout for this rule.
+      # Required for long-lived SSE connections (default is 180s / 3 min).
+      # Set to a high value (e.g. 3600) so SSE sessions survive idle periods.
+      timeout: {{ .Values.apirule.timeout }}
+      {{- end }}
+{{- else }}
+      accessStrategies:
+        {{- toYaml .Values.apirule.accessStrategies | nindent 8 }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,15 @@
+pluginManagement {
+	repositories {
+		maven {
+			url 'https://int.repositories.cloud.sap/artifactory/proxy-3rd-party-releases-plugins-gradle/'
+			allowInsecureProtocol = false
+		}
+		maven {
+			url 'https://int.repositories.cloud.sap/artifactory/build-releases/'
+			allowInsecureProtocol = false
+		}
+		gradlePluginPortal()
+	}
+}
+
+rootProject.name = 'hello-world-mcp'

@@ -1,0 +1,50 @@
+replicaCount: 1
+
+image:
+  tag: ""  # Overridden by workflow with CPE version
+
+service:
+  type: ClusterIP
+
+serviceAccount:
+  # The pipeline's kyma-deployer identity cannot create ServiceAccounts.
+  # The workload does not call the Kubernetes API, so use the existing
+  # namespace default account with token automount disabled.
+  create: false
+  automount: false
+  name: default
+
+ias:
+  issuerUri: https://a3enmtmdf.accounts400.ondemand.com
+  # Comma-separated list of allowed OIDC client IDs (aud claim check).  
+  # Format: <mcp-server-client-id>
+  mcpUiClientId: "3c47ad61-7c15-4b51-bdb5-11ea2a1bbb6f"
+  # Backend M2M credentials come from the pre-created K8s Secret.
+  # See scripts/bootstrap-ias-secret.sh for the one-time creation command.
+  credentialsSecretName: hello-world-mcp-ias-credentials
+
+backend:
+  baseUrl: https://hello-world-service-qa.c-1282d6a.stage.kyma.ondemand.com
+
+# Expose MCP server externally via Kyma APIRule in QA.
+# The APIRule name will be 'hello-world-mcp' – distinct from
+# 'hello-world-service' in the same namespace: no conflict.
+apirule:
+  enabled: true
+  gatewayNamespace: kyma-system
+  gateway: kyma-gateway
+  # Joule Desktop connector URL: https://hello-world-mcp-qa.c-1282d6a.stage.kyma.ondemand.com/mcp
+  host: hello-world-mcp-qa.c-1282d6a.stage.kyma.ondemand.com
+  path: /{**}
+  methods:
+    - GET
+    - POST
+    - OPTIONS
+  noAuth: true   # Auth enforced by Spring Security inside the app
+  timeout: 3600  # 1-hour gateway route timeout — prevents 180s SSE session breaks
+  accessStrategies:
+    - handler: allow
+
+env: # For troubleshooting authentication issues
+  - name: MCP_AUTH_DIAGNOSTICS_ENABLED
+    value: "true"

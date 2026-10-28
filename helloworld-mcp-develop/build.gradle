@@ -1,0 +1,75 @@
+plugins {
+    id 'org.springframework.boot' version '4.1.1'
+    id 'io.spring.dependency-management' version '1.1.7'
+    id 'java'
+}
+
+group   = 'com.sap.gtlc'
+
+// Read version from centralized VERSION file
+version = file('VERSION').text.trim()
+
+description = 'MCP Server wrapping the Hello World service on SAP BTP Kyma'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    maven { url "https://int.repositories.cloud.sap/artifactory/build-milestones" }
+    maven { url "https://int.repositories.cloud.sap/artifactory/build-snapshots" }
+    maven { url "https://int.repositories.cloud.sap/artifactory/build-releases" }
+    maven { url "https://int.repositories.cloud.sap/artifactory/build-releases-3rd-party" }
+    // Spring AI 2.x GA artifacts are on Maven Central; milestone repo no longer needed
+}
+
+ext {
+    springAiVersion = '2.0.1'
+}
+
+// Import Spring AI BOM so individual spring-ai-* versions are managed centrally
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.ai:spring-ai-bom:${springAiVersion}"
+    }
+}
+
+dependencies {
+    // Spring Boot Web (servlet stack)
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    // Spring Boot Actuator – exposes /actuator/health for Kyma probes
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+    // Spring AI MCP Server (WebMVC / servlet flavour) – Streamable HTTP transport
+    // Exposes:  POST /mcp  – initialize + tool calls (Joule Desktop connects here)
+    //           GET  /mcp  – optional SSE stream for server-to-client notifications
+    //           DELETE /mcp – terminate session
+    implementation 'org.springframework.ai:spring-ai-starter-mcp-server-webmvc'
+
+    // Spring Security OAuth2 Resource Server
+    // Validates incoming IAS JWTs from Joule Desktop users
+    // Configured via spring.security.oauth2.resourceserver.jwt in application.yaml
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+
+    // Explicit Jackson dependency for serializing outbound backend request bodies in logs.
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+
+    // Test
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+// Optional: produce a lean layered JAR for smaller Docker image layers
+tasks.named('bootJar') {
+    layered {
+        enabled = true
+    }
+}
